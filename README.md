@@ -26,7 +26,6 @@ A Torznab/Newznab compatible indexer service that allows [Prowlarr](https://prow
 docker run -d \
   --name prowlarr-orionoid \
   -p 8080:8080 \
-  -e ORIONOID_APP_API_KEY=your_app_api_key \
   -e ORIONOID_USER_API_KEY=your_user_api_key \
   jamtur01/prowlarr-orionoid:latest
 ```
@@ -44,7 +43,6 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - ORIONOID_APP_API_KEY=your_app_api_key
       - ORIONOID_USER_API_KEY=your_user_api_key
 ```
 
@@ -56,9 +54,7 @@ docker-compose up -d
 ## Prerequisites
 
 1. **Orionoid Account**: You need an active Orionoid account with API access
-2. **Orionoid API Keys**: 
-   - **App API Key**: Register your app at [Orionoid](https://orionoid.com) to get an app API key
-   - **User API Key**: Get from your Orionoid account settings
+2. **Orionoid User API Key**: Get from your Orionoid account settings (this is unique to you)
 
 ## Configuration
 
@@ -66,7 +62,6 @@ docker-compose up -d
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `ORIONOID_APP_API_KEY` | Yes | - | Your Orionoid app API key |
 | `ORIONOID_USER_API_KEY` | Yes | - | Your Orionoid user API key |
 | `SERVICE_PORT` | No | 8080 | Port to run the service on |
 | `SERVICE_HOST` | No | 0.0.0.0 | Host to bind the service to |
@@ -150,7 +145,6 @@ docker build -t prowlarr-orionoid .
 docker run -d \
   --name prowlarr-orionoid \
   -p 8080:8080 \
-  -e ORIONOID_APP_API_KEY=your_app_api_key \
   -e ORIONOID_USER_API_KEY=your_user_api_key \
   prowlarr-orionoid
 ```
@@ -172,7 +166,6 @@ docker run -d \
 
 4. Create a `.env` file:
    ```env
-   ORIONOID_APP_API_KEY=your_app_api_key
    ORIONOID_USER_API_KEY=your_user_api_key
    ```
 

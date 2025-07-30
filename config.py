@@ -4,7 +4,9 @@ from typing import Optional
 
 class Settings(BaseSettings):
     # Orionoid API credentials
-    orionoid_app_api_key: str
+    # App key is hardcoded as per Orionoid documentation
+    # This is the official Prowlarr-Orionoid app key
+    orionoid_app_api_key: str = "WYC8JEBTCABDCB6SDNNGMJHP8AVSBEHV"
     orionoid_user_api_key: str
     
     # Service configuration
