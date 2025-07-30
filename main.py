@@ -239,9 +239,13 @@ async def api_endpoint(
     season: Optional[int] = Query(None, description="Season number"),
     ep: Optional[int] = Query(None, description="Episode number"),
     limit: Optional[int] = Query(100, description="Result limit"),
-    offset: Optional[int] = Query(0, description="Result offset")
+    offset: Optional[int] = Query(0, description="Result offset"),
+    extended: Optional[int] = Query(None, description="Extended attributes")
 ):
     """Main API endpoint for Torznab/Newznab protocol"""
+    
+    # Log incoming request parameters for debugging
+    logger.info(f"API request: t={t}, q={q}, cat={cat}, imdbid={imdbid}, tvdbid={tvdbid}, tmdbid={tmdbid}, season={season}, ep={ep}, limit={limit}")
     
     try:
         # Handle capabilities request (no auth required)
@@ -344,6 +348,8 @@ async def search_orionoid(
         imdb_id = imdb_id[2:]
     
     # Perform search
+    logger.info(f"Searching Orionoid with: query={query}, imdb_id={imdb_id}, tvdb_id={tvdb_id}, tmdb_id={tmdb_id}, media_type={media_type}, season={season}, episode={episode}")
+    
     results = await orion_client.search_streams(
         query=query,
         imdb_id=imdb_id,
@@ -359,6 +365,10 @@ async def search_orionoid(
     if results.get("result", {}).get("status") != "success":
         error_msg = results.get("result", {}).get("message", "Unknown error")
         raise Exception(f"Orionoid API error: {error_msg}")
+    
+    # Log results
+    streams_count = len(results.get("data", {}).get("streams", []))
+    logger.info(f"Orionoid returned {streams_count} streams")
     
     # Update last successful search time
     last_successful_search = datetime.now(timezone.utc)
@@ -380,10 +390,11 @@ async def api_endpoint_with_id(
     season: Optional[int] = Query(None),
     ep: Optional[int] = Query(None),
     limit: Optional[int] = Query(100),
-    offset: Optional[int] = Query(0)
+    offset: Optional[int] = Query(0),
+    extended: Optional[int] = Query(None)
 ):
     """Alternative API endpoint with indexer ID in path (Prowlarr compatibility)"""
-    return await api_endpoint(t, apikey, q, cat, imdbid, tvdbid, tmdbid, season, ep, limit, offset)
+    return await api_endpoint(t, apikey, q, cat, imdbid, tvdbid, tmdbid, season, ep, limit, offset, extended)
 
 
 if __name__ == "__main__":

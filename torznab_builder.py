@@ -171,9 +171,9 @@ class TorznabBuilder:
             etree.SubElement(item, "comments").text = "https://orionoid.com"
             
             # Published date
-            added = stream.get("added", {})
-            if added and added.get("timestamp"):
-                pub_date = datetime.fromtimestamp(added["timestamp"])
+            time_info = stream.get("time", {})
+            if time_info and time_info.get("added"):
+                pub_date = datetime.fromtimestamp(time_info["added"])
                 etree.SubElement(item, "pubDate").text = pub_date.strftime("%a, %d %b %Y %H:%M:%S +0000")
             
             # Size
@@ -185,7 +185,8 @@ class TorznabBuilder:
                 enclosure = etree.SubElement(item, "enclosure")
                 enclosure.set("url", links[0])
                 enclosure.set("length", str(size) if size else "0")
-                enclosure.set("type", "application/x-bittorrent" if stream.get("type") == "torrent" else "application/x-nzb")
+                stream_info = stream.get("stream", {})
+                enclosure.set("type", "application/x-bittorrent" if stream_info.get("type") == "torrent" else "application/x-nzb")
             
             # Torznab attributes
             torznab_ns = "{http://torznab.com/schemas/2015/feed}"
@@ -202,20 +203,21 @@ class TorznabBuilder:
             attr.set("value", str(size) if size else "0")
             
             # Seeders (for torrents)
-            if stream.get("type") == "torrent":
-                popularity = stream.get("popularity", {})
-                seeders = popularity.get("seeders", 0)
+            stream_info = stream.get("stream", {})
+            if stream_info.get("type") == "torrent":
+                seeders = stream_info.get("seeds", 0)
                 attr = etree.SubElement(item, f"{torznab_ns}attr")
                 attr.set("name", "seeders")
                 attr.set("value", str(seeders))
                 
-                peers = popularity.get("leechers", 0) + seeders
+                # Orionoid doesn't provide leechers, just use seeders as peers
                 attr = etree.SubElement(item, f"{torznab_ns}attr")
                 attr.set("name", "peers")
-                attr.set("value", str(peers))
+                attr.set("value", str(seeders))
             
             # InfoHash (for torrents)
-            if stream.get("type") == "torrent" and file_info.get("hash"):
+            stream_info = stream.get("stream", {})
+            if stream_info.get("type") == "torrent" and file_info.get("hash"):
                 attr = etree.SubElement(item, f"{torznab_ns}attr")
                 attr.set("name", "infohash")
                 attr.set("value", file_info["hash"])
