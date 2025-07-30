@@ -268,19 +268,60 @@ async def api_endpoint(
         # Handle different search types
         if t == "search":
             # General search - determine media type from categories
-            media_type = "movie"  # default
             if cat:
                 # Check if categories are TV categories (5xxx)
                 categories = [int(c) for c in cat.split(",") if c.isdigit()]
                 if any(c >= 5000 and c < 6000 for c in categories):
                     media_type = "show"
-            
-            results = await search_orionoid(
-                query=q,
-                imdb_id=imdbid,
-                media_type=media_type,
-                limit=limit
-            )
+                else:
+                    media_type = "movie"
+                
+                results = await search_orionoid(
+                    query=q,
+                    imdb_id=imdbid,
+                    media_type=media_type,
+                    limit=limit
+                )
+            else:
+                # No category specified - search both movies and TV shows
+                logger.info("No category specified - searching both movies and TV shows")
+                
+                # Search movies
+                movie_results = await search_orionoid(
+                    query=q,
+                    imdb_id=imdbid,
+                    media_type="movie",
+                    limit=limit // 2  # Split limit between movie and TV
+                )
+                
+                # Search TV shows
+                tv_results = await search_orionoid(
+                    query=q,
+                    imdb_id=imdbid,
+                    media_type="show",
+                    limit=limit // 2
+                )
+                
+                # Combine results
+                results = {
+                    "result": {"status": "success"},
+                    "data": {
+                        "streams": [],
+                        "count": 0
+                    }
+                }
+                
+                # Add movie streams
+                if movie_results.get("result", {}).get("status") == "success":
+                    movie_streams = movie_results.get("data", {}).get("streams", [])
+                    results["data"]["streams"].extend(movie_streams)
+                
+                # Add TV streams
+                if tv_results.get("result", {}).get("status") == "success":
+                    tv_streams = tv_results.get("data", {}).get("streams", [])
+                    results["data"]["streams"].extend(tv_streams)
+                
+                results["data"]["count"] = len(results["data"]["streams"])
         
         elif t == "tvsearch":
             # TV search
