@@ -11,7 +11,7 @@ services:
     environment:
       # REQUIRED: Orionoid API credentials
       - ORIONOID_APP_API_KEY=WYC8JEBTCABDCB6SDNNGMJHP8AVSBEHV
-      - ORIONOID_USER_API_KEY=***REMOVED***
+      - ORIONOID_USER_API_KEY=YOUR_ORIONOID_USER_API_KEY_HERE
       
       # OPTIONAL: Service configuration
       - SERVICE_PORT=8080
