@@ -5,7 +5,7 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/jamtur01/prowlarr-orionoid)](https://hub.docker.com/r/jamtur01/prowlarr-orionoid)
 [![Docker Image Size](https://img.shields.io/docker/image-size/jamtur01/prowlarr-orionoid/latest)](https://hub.docker.com/r/jamtur01/prowlarr-orionoid)
 
-A Torznab/Newznab compatible indexer service that allows [Prowlarr](https://prowlarr.com/) to use [Orionoid](https://orionoid.com/) as an indexer. This service translates between Prowlarr's indexer protocol and Orionoid's API, enabling seamless integration.
+A Torznab/Newznab compatible indexer service that allows [Prowlarr](https://prowlarr.com/) to use [Orionoid](https://orionoid.com/) as an indexer. This service translates between Prowlarr's indexer protocol and Orionoid's API.
 
 ## Features
 
