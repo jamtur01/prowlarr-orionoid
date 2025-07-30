@@ -1,0 +1,65 @@
+name: Create Release
+
+on:
+  workflow_run:
+    workflows: ["Build and Publish Docker Image"]
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && startsWith(github.event.workflow_run.head_branch, 'v') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+
+      - name: Extract version from tag
+        id: extract_version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION=${{ steps.extract_version.outputs.VERSION }}
+          NOTES=$(awk -v ver="[$VERSION]" 'BEGIN{found=0} /^## \[/{if(found) exit; if($0 ~ ver) found=1} found' CHANGELOG.md)
+          echo "NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.extract_version.outputs.VERSION }}
+          release_name: Release ${{ steps.extract_version.outputs.VERSION }}
+          body: |
+            ## Docker Image
+            
+            Pull the latest image:
+            ```bash
+            docker pull jamtur01/prowlarr-orionoid:latest
+            ```
+            
+            Or use this specific version:
+            ```bash
+            docker pull jamtur01/prowlarr-orionoid:${{ steps.extract_version.outputs.VERSION }}
+            ```
+            
+            ## Changes
+            
+            ${{ steps.release_notes.outputs.NOTES }}
+            
+            ## Quick Start
+            
+            See the [README](https://github.com/${{ github.repository }}/blob/main/README.md) for installation and configuration instructions.
+          draft: false
+          prerelease: false
