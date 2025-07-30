@@ -311,14 +311,18 @@ async def api_endpoint(
                     }
                 }
                 
-                # Add movie streams
+                # Add movie streams (mark them as movies)
                 if movie_results.get("result", {}).get("status") == "success":
                     movie_streams = movie_results.get("data", {}).get("streams", [])
+                    for stream in movie_streams:
+                        stream["_media_type"] = "movie"
                     results["data"]["streams"].extend(movie_streams)
                 
-                # Add TV streams
+                # Add TV streams (mark them as shows)
                 if tv_results.get("result", {}).get("status") == "success":
                     tv_streams = tv_results.get("data", {}).get("streams", [])
+                    for stream in tv_streams:
+                        stream["_media_type"] = "show"
                     results["data"]["streams"].extend(tv_streams)
                 
                 results["data"]["count"] = len(results["data"]["streams"])

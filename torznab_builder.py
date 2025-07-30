@@ -261,7 +261,12 @@ class TorznabBuilder:
         quality = str(video_info.get("quality", "")).lower() if video_info.get("quality") else ""
         
         # Determine if it's a movie or TV show
-        is_tv = query_type == "tvsearch" or stream.get("meta", {}).get("episode")
+        # First check our media type marker (from combined searches)
+        is_tv = stream.get("_media_type") == "show"
+        
+        # If no marker, check other indicators
+        if not is_tv and "_media_type" not in stream:
+            is_tv = query_type == "tvsearch" or stream.get("meta", {}).get("episode") is not None
         
         # Determine quality level
         if "2160" in quality or "uhd" in quality or "4k" in quality:
