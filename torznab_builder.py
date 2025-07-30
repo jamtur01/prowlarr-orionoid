@@ -144,14 +144,14 @@ class TorznabBuilder:
                 title_parts.append(meta_info["title"])
             
             # Add quality info
-            quality = video_info.get("quality", "").upper()
+            quality = video_info.get("quality")
             if quality:
-                title_parts.append(f"[{quality}]")
+                title_parts.append(f"[{str(quality).upper()}]")
             
             # Add codec info
-            codec = video_info.get("codec", "").upper()
+            codec = video_info.get("codec")
             if codec:
-                title_parts.append(f"[{codec}]")
+                title_parts.append(f"[{str(codec).upper()}]")
             
             title = " ".join(title_parts) if title_parts else "Unknown"
             etree.SubElement(item, "title").text = title
@@ -258,7 +258,7 @@ class TorznabBuilder:
     def _determine_category(stream: Dict[str, Any], query_type: str) -> int:
         """Determine the appropriate category for a stream"""
         video_info = stream.get("video", {})
-        quality = video_info.get("quality", "").lower()
+        quality = str(video_info.get("quality", "")).lower() if video_info.get("quality") else ""
         
         # Determine if it's a movie or TV show
         is_tv = query_type == "tvsearch" or stream.get("meta", {}).get("episode")

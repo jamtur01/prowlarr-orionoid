@@ -267,10 +267,18 @@ async def api_endpoint(
         
         # Handle different search types
         if t == "search":
-            # General search
+            # General search - determine media type from categories
+            media_type = "movie"  # default
+            if cat:
+                # Check if categories are TV categories (5xxx)
+                categories = [int(c) for c in cat.split(",") if c.isdigit()]
+                if any(c >= 5000 and c < 6000 for c in categories):
+                    media_type = "show"
+            
             results = await search_orionoid(
                 query=q,
                 imdb_id=imdbid,
+                media_type=media_type,
                 limit=limit
             )
         
