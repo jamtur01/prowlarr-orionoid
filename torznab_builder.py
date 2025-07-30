@@ -96,9 +96,12 @@ class TorznabBuilder:
     @staticmethod
     def build_search_results(orion_results: Dict[str, Any], query_type: str = "search") -> str:
         """Build search results RSS XML response"""
-        root = etree.Element("rss", version="2.0")
-        root.set("{http://www.w3.org/2000/xmlns/}newznab", "http://www.newznab.com/DTD/2010/feeds/attributes/")
-        root.set("{http://www.w3.org/2000/xmlns/}torznab", "http://torznab.com/schemas/2015/feed")
+        # Create root with namespaces
+        nsmap = {
+            'newznab': 'http://www.newznab.com/DTD/2010/feeds/attributes/',
+            'torznab': 'http://torznab.com/schemas/2015/feed'
+        }
+        root = etree.Element("rss", version="2.0", nsmap=nsmap)
         
         channel = etree.SubElement(root, "channel")
         
