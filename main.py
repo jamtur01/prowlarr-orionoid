@@ -327,6 +327,18 @@ async def search_orionoid(
     """Search Orionoid and return results"""
     global last_successful_search
     
+    # Check if we have any search criteria
+    if not any([query, imdb_id, tvdb_id, tmdb_id]):
+        # Return empty result for empty searches (Prowlarr connection test)
+        logger.info("Empty search request - returning empty result set")
+        return {
+            "result": {"status": "success"},
+            "data": {
+                "streams": [],
+                "count": 0
+            }
+        }
+    
     # Clean up IDs (remove 'tt' prefix from IMDb IDs if present)
     if imdb_id and imdb_id.startswith("tt"):
         imdb_id = imdb_id[2:]
