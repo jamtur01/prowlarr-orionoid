@@ -1,0 +1,49 @@
+services:
+  prowlarr-orionoid:
+    image: prowlarr-orionoid:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: prowlarr-orionoid
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # REQUIRED: Orionoid API credentials
+      - ORIONOID_APP_API_KEY=WYC8JEBTCABDCB6SDNNGMJHP8AVSBEHV
+      - ORIONOID_USER_API_KEY=***REMOVED***
+      
+      # OPTIONAL: Service configuration
+      - SERVICE_PORT=8080
+      - SERVICE_HOST=0.0.0.0
+      
+      # OPTIONAL: Prowlarr API key (if you want to restrict access)
+      # - PROWLARR_API_KEY=YOUR_PROWLARR_API_KEY_HERE
+      
+      # OPTIONAL: Search limits
+      - DEFAULT_SEARCH_LIMIT=100
+      - MAX_SEARCH_LIMIT=1000
+      
+      # OPTIONAL: Logging
+      - LOG_LEVEL=INFO
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; response = httpx.get('http://localhost:8080/health'); exit(0 if response.status_code == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    
+    # Optional: Mount a .env file instead of using environment variables
+    # env_file:
+    #   - .env
+    
+    # Optional: If you want to run this alongside Prowlarr
+    # networks:
+    #   - prowlarr-network
+
+# Optional: Create a network if running alongside Prowlarr
+# networks:
+#   prowlarr-network:
+#     external: true
