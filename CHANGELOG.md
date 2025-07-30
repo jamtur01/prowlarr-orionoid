@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2025-01-29
+## [1.0.0] - 2025-01-30
 
 ### Added
 - Initial release of Prowlarr-Orionoid Bridge
@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Detailed logging with configurable levels
 - Support for both torrent and NZB results from Orionoid
 - Automatic quality categorization (SD/HD/UHD)
+- Combined movie and TV search when no category is specified
+- Intelligent TV show detection based on API data and file naming
+- Graceful error handling for partial search failures
 
 ### Technical Details
 - Built with FastAPI for high performance async operations
@@ -29,10 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pydantic for configuration and data validation
 - Full type hints throughout the codebase
 - Production-ready Docker setup with non-root user
+- Multi-architecture Docker support (amd64, arm64, arm/v7)
+- GitHub Actions for CI/CD with automatic Docker Hub publishing
 
 ### Configuration
-- Environment variables renamed for clarity:
-  - `ORIONOID_APP_API_KEY` (formerly `ORIONOID_APP_KEY`)
-  - `ORIONOID_USER_API_KEY` (formerly `ORIONOID_USER_KEY`)
+- App API key is now hardcoded as per Orionoid documentation
+- Only user API key needs to be configured via environment variable
 
 [1.0.0]: https://github.com/jamtur01/prowlarr-orionoid/releases/tag/v1.0.0

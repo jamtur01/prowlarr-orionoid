@@ -287,20 +287,28 @@ async def api_endpoint(
                 logger.info("No category specified - searching both movies and TV shows")
                 
                 # Search movies
-                movie_results = await search_orionoid(
-                    query=q,
-                    imdb_id=imdbid,
-                    media_type="movie",
-                    limit=limit // 2  # Split limit between movie and TV
-                )
+                try:
+                    movie_results = await search_orionoid(
+                        query=q,
+                        imdb_id=imdbid,
+                        media_type="movie",
+                        limit=limit // 2  # Split limit between movie and TV
+                    )
+                except Exception as e:
+                    logger.warning(f"Movie search failed: {e}")
+                    movie_results = None
                 
                 # Search TV shows
-                tv_results = await search_orionoid(
-                    query=q,
-                    imdb_id=imdbid,
-                    media_type="show",
-                    limit=limit // 2
-                )
+                try:
+                    tv_results = await search_orionoid(
+                        query=q,
+                        imdb_id=imdbid,
+                        media_type="show",
+                        limit=limit // 2
+                    )
+                except Exception as e:
+                    logger.warning(f"TV search failed: {e}")
+                    tv_results = None
                 
                 # Combine results
                 results = {
@@ -312,18 +320,22 @@ async def api_endpoint(
                 }
                 
                 # Add movie streams (mark them as movies)
-                if movie_results.get("result", {}).get("status") == "success":
+                if movie_results and movie_results.get("result", {}).get("status") == "success":
                     movie_streams = movie_results.get("data", {}).get("streams", [])
                     for stream in movie_streams:
                         stream["_media_type"] = "movie"
                     results["data"]["streams"].extend(movie_streams)
                 
                 # Add TV streams (mark them as shows)
-                if tv_results.get("result", {}).get("status") == "success":
+                if tv_results and tv_results.get("result", {}).get("status") == "success":
                     tv_streams = tv_results.get("data", {}).get("streams", [])
                     for stream in tv_streams:
                         stream["_media_type"] = "show"
                     results["data"]["streams"].extend(tv_streams)
+                
+                # If both searches failed, return an error
+                if movie_results is None and tv_results is None:
+                    raise Exception("Both movie and TV searches failed")
                 
                 results["data"]["count"] = len(results["data"]["streams"])
         
