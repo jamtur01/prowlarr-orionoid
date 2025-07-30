@@ -333,35 +333,10 @@ async def search_orionoid(
     
     # Check if we have any search criteria
     if not any([query, imdb_id, tvdb_id, tmdb_id]):
-        # Return a sample result for empty searches (Prowlarr connection test)
-        logger.info("Empty search request - returning sample result for indexer validation")
-        return {
-            "result": {"status": "success"},
-            "data": {
-                "streams": [{
-                    "id": "SAMPLE123",
-                    "links": ["magnet:?xt=urn:btih:0000000000000000000000000000000000000000&dn=Sample"],
-                    "time": {
-                        "added": 1700000000
-                    },
-                    "stream": {
-                        "type": "torrent",
-                        "seeds": 1
-                    },
-                    "file": {
-                        "name": "Prowlarr Orionoid Indexer Test - Connection Successful",
-                        "size": 1024,
-                        "hash": "0000000000000000000000000000000000000000"
-                    },
-                    "video": {
-                        "quality": "hd1080",
-                        "codec": "h264"
-                    },
-                    "meta": {}
-                }],
-                "count": 1
-            }
-        }
+        # For empty searches (Prowlarr connection test), do a real search for a popular movie
+        logger.info("Empty search request - performing test search for 'The Matrix' to validate connection")
+        query = "The Matrix"
+        limit = 1  # Only need one result for validation
     
     # Clean up IDs (remove 'tt' prefix from IMDb IDs if present)
     if imdb_id and imdb_id.startswith("tt"):
