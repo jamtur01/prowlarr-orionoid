@@ -74,17 +74,19 @@ class OrionoidClient:
         if tmdb_id:
             params["idtmdb"] = tmdb_id
         
-        # Add episode info for TV shows
-        if media_type == "show" and season is not None and episode is not None:
-            params["numberseason"] = season
-            params["numberepisode"] = episode
+        # Add season/episode info for TV shows
+        if media_type == "show":
+            if season is not None:
+                params["numberseason"] = season
+            if episode is not None:
+                params["numberepisode"] = episode
         
         # Add quality filters
         if video_quality:
             params["videoquality"] = ",".join(video_quality)
         
         # Include additional useful parameters
-        params["protocoltorent"] = 1  # Include torrents
+        params["protocoltorrent"] = 1  # Include torrents
         params["protocolnzb"] = 1      # Include NZBs
         params["debridlookup"] = 0     # Skip debrid lookup to save API calls
         
