@@ -1,7 +1,10 @@
 from lxml import etree
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 
 class TorznabBuilder:
@@ -251,7 +254,7 @@ class TorznabBuilder:
             
         except Exception as e:
             # Log error and skip this item
-            print(f"Error building item: {e}")
+            logger.warning(f"Error building item: {e}")
             return None
     
     @staticmethod

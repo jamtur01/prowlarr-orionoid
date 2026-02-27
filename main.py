@@ -102,10 +102,14 @@ async def health_check(force: bool = Query(False, description="Force fresh check
     
     # Check cache unless forced
     if not force and health_check_cache and health_check_cache_time:
-        if (time.time() - health_check_cache_time) < 30:  # 30 second cache
+        if (time.time() - health_check_cache_time) < settings.cache_ttl:
+            cached = {
+                k: v for k, v in health_check_cache.items()
+                if k != "_status_code"
+            }
             return JSONResponse(
-                content=health_check_cache,
-                status_code=health_check_cache["_status_code"]
+                content=cached,
+                status_code=health_check_cache["_status_code"],
             )
     
     start_time = time.time()
@@ -217,13 +221,11 @@ async def health_check(force: bool = Query(False, description="Force fresh check
     
     # Determine status code
     status_code = 503 if overall_status == "unhealthy" else 200
-    response["_status_code"] = status_code
-    
-    # Cache successful responses
-    if overall_status != "unhealthy":
-        health_check_cache = response.copy()
-        health_check_cache_time = time.time()
-    
+
+    # Cache all responses (including unhealthy) to avoid hammering the API
+    health_check_cache = {**response, "_status_code": status_code}
+    health_check_cache_time = time.time()
+
     return JSONResponse(content=response, status_code=status_code)
 
 
@@ -286,28 +288,27 @@ async def api_endpoint(
                 # No category specified - search both movies and TV shows
                 logger.info("No category specified - searching both movies and TV shows")
                 
-                # Search movies
-                try:
-                    movie_results = await search_orionoid(
+                # Search movies and TV in parallel
+                movie_results, tv_results = await asyncio.gather(
+                    search_orionoid(
                         query=q,
                         imdb_id=imdbid,
                         media_type="movie",
-                        limit=limit // 2  # Split limit between movie and TV
-                    )
-                except Exception as e:
-                    logger.warning(f"Movie search failed: {e}")
-                    movie_results = None
-                
-                # Search TV shows
-                try:
-                    tv_results = await search_orionoid(
+                        limit=limit // 2,
+                    ),
+                    search_orionoid(
                         query=q,
                         imdb_id=imdbid,
                         media_type="show",
-                        limit=limit // 2
-                    )
-                except Exception as e:
-                    logger.warning(f"TV search failed: {e}")
+                        limit=limit // 2,
+                    ),
+                    return_exceptions=True,
+                )
+                if isinstance(movie_results, BaseException):
+                    logger.warning(f"Movie search failed: {movie_results}")
+                    movie_results = None
+                if isinstance(tv_results, BaseException):
+                    logger.warning(f"TV search failed: {tv_results}")
                     tv_results = None
                 
                 # Combine results
@@ -345,6 +346,7 @@ async def api_endpoint(
                 query=q,
                 imdb_id=imdbid,
                 tvdb_id=tvdbid,
+                tmdb_id=tmdbid,
                 media_type="show",
                 season=season,
                 episode=ep,
