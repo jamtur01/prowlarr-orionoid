@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `search_orionoid()` now updates API status on each success/failure, keeping health state current without extra API calls
 
 ### Added
-- Test suite with 57 tests covering health endpoint, Torznab API, and XML builder
+- Test suite covering health endpoint, Torznab API routing, and XML builder
 - `pyproject.toml` as canonical project configuration (replaces `requirements.txt`)
 - CI workflow runs pytest and ruff lint before Docker build
 - Actions pinned to SHA hashes for supply chain security
