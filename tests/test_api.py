@@ -53,14 +53,15 @@ class TestSearch:
 
 
 class TestConnectionTest:
-    async def test_empty_search_returns_xml_without_api_call(
+    async def test_empty_search_returns_synthetic_result_without_api_call(
         self, test_client, reset_globals
     ):
-        """Prowlarr connection test (no query/IDs) should not hit the API."""
+        """Prowlarr connection test returns a synthetic item (no API call)."""
         resp = await test_client.get("/api?t=search")
         assert resp.status_code == 200
         root = _parse_xml(resp.text)
         assert root.tag == "rss"
+        assert len(root.findall(".//item")) >= 1
         main_module.orion_client.search_streams.assert_not_called()
 
 

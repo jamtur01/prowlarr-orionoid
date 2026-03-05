@@ -376,11 +376,28 @@ async def search_orionoid(
     """Search Orionoid and return results"""
     global last_successful_search
 
-    # Empty search = Prowlarr connection test. Return empty results
-    # without hitting the API -- Prowlarr just needs valid XML back.
+    # Empty search = Prowlarr connection test.  Return a synthetic
+    # result so Prowlarr sees ≥1 item and marks the indexer as
+    # available, without making any Orionoid API calls.
     if not any([query, imdb_id, tvdb_id, tmdb_id]):
-        logger.info("Empty search (connection test) - returning empty results")
-        return {"result": {"status": "success"}, "data": {"streams": []}}
+        logger.info("Empty search (connection test) - returning synthetic result")
+        return {
+            "result": {"status": "success"},
+            "data": {
+                "streams": [
+                    {
+                        "id": "connection-test",
+                        "file": {"name": "Connection Test", "size": 0},
+                        "video": {"quality": "1080"},
+                        "audio": {},
+                        "meta": {},
+                        "links": ["magnet:?xt=urn:btih:" + "0" * 40],
+                        "stream": {"type": "torrent", "seeds": 1},
+                        "time": {"added": int(time.time())},
+                    }
+                ],
+            },
+        }
 
     # Clean up IDs (remove 'tt' prefix from IMDb IDs if present)
     if imdb_id and imdb_id.startswith("tt"):
