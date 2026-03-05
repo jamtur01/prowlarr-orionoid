@@ -376,15 +376,28 @@ async def search_orionoid(
     """Search Orionoid and return results"""
     global last_successful_search
 
-    # Check if we have any search criteria
+    # Empty search = Prowlarr connection test.  Return a synthetic
+    # result so Prowlarr sees ≥1 item and marks the indexer as
+    # available, without making any Orionoid API calls.
     if not any([query, imdb_id, tvdb_id, tmdb_id]):
-        # For empty searches (Prowlarr connection test), do a real search for a popular movie
-        logger.info(
-            "Empty search request - performing test search for "
-            "'The Matrix' to validate connection"
-        )
-        query = "The Matrix"
-        limit = 1  # Only need one result for validation
+        logger.info("Empty search (connection test) - returning synthetic result")
+        return {
+            "result": {"status": "success"},
+            "data": {
+                "streams": [
+                    {
+                        "id": "connection-test",
+                        "file": {"name": "Connection Test", "size": 0},
+                        "video": {"quality": "1080"},
+                        "audio": {},
+                        "meta": {},
+                        "links": ["magnet:?xt=urn:btih:" + "0" * 40],
+                        "stream": {"type": "torrent", "seeds": 1},
+                        "time": {"added": int(time.time())},
+                    }
+                ],
+            },
+        }
 
     # Clean up IDs (remove 'tt' prefix from IMDb IDs if present)
     if imdb_id and imdb_id.startswith("tt"):
@@ -412,11 +425,16 @@ async def search_orionoid(
         _update_api_status(healthy=False, message=str(e))
         raise
 
-    # Check for errors
-    if results.get("result", {}).get("status") != "success":
+    # Check for errors -- but "not found" is just empty results, not a failure
+    result_status = results.get("result", {}).get("status")
+    if result_status != "success":
         error_msg = results.get("result", {}).get("message", "Unknown error")
-        _update_api_status(healthy=False, message=error_msg)
-        raise Exception(f"Orionoid API error: {error_msg}")
+        if "not be found" in error_msg or "do not exist" in error_msg:
+            logger.info("No streams found (not an error): %s", error_msg)
+            results = {"result": {"status": "success"}, "data": {"streams": []}}
+        else:
+            _update_api_status(healthy=False, message=error_msg)
+            raise Exception(f"Orionoid API error: {error_msg}")
 
     # Log results
     streams_count = len(results.get("data", {}).get("streams", []))

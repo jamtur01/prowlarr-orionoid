@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Health endpoint called Orionoid API on every request, draining ~288 API calls/day from Docker healthchecks alone and causing cascading 503s when quota was exhausted
 - Container marked unhealthy and restarted when Orionoid API had transient errors, despite the service itself being functional
 - Successful search cleared startup user info (username, quota) from health response
+- Prowlarr connection tests triggered real API searches (burning 4 calls per test); now return a synthetic result with zero API calls
+- Orionoid "not found" responses (zero results for a valid query) incorrectly marked the API as unhealthy and raised an error; now treated as empty results
 
 ### Changed
 - `/health` now reads passive in-memory state instead of calling the Orionoid API; returns 200 as long as the HTTP server is running, with degraded/warning status in the response body
