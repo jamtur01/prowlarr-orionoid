@@ -1,17 +1,18 @@
-from fastapi import FastAPI, Query, Response, HTTPException
-from fastapi.responses import PlainTextResponse, JSONResponse
-from typing import Optional, Dict, Any
+import asyncio
 import logging
-import uvicorn
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-import time
-import asyncio
+from typing import Any, Dict, Optional
 
+import uvicorn
+from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi.responses import JSONResponse, PlainTextResponse
+
+from __version__ import __version__
 from config import settings
 from orionoid_client import OrionoidClient
 from torznab_builder import TorznabBuilder
-from __version__ import __version__
 
 # Configure logging
 logging.basicConfig(
@@ -25,40 +26,92 @@ logger = logging.getLogger(__name__)
 orion_client: Optional[OrionoidClient] = None
 startup_time: Optional[float] = None
 last_successful_search: Optional[datetime] = None
-health_check_cache: Optional[Dict[str, Any]] = None
-health_check_cache_time: Optional[float] = None
+
+# Passive API status -- updated by lifespan() and search_orionoid()
+api_status: Dict[str, Any] = {
+    "healthy": False,
+    "message": "Not yet checked",
+    "last_checked": None,
+    "user_info": None,
+}
+
+
+_SENTINEL = object()
+
+
+def _update_api_status(
+    healthy: bool,
+    message: str,
+    user_info: Any = _SENTINEL,
+):
+    """Update the passive api_status dict from startup or search results.
+
+    Pass user_info explicitly to overwrite; omit it to preserve the
+    existing value (e.g. startup-populated username/quota).
+    """
+    api_status["healthy"] = healthy
+    api_status["message"] = message
+    api_status["last_checked"] = datetime.now(timezone.utc).isoformat()
+    if user_info is not _SENTINEL:
+        api_status["user_info"] = user_info
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     global orion_client, startup_time
-    orion_client = OrionoidClient(settings.orionoid_app_api_key, settings.orionoid_user_api_key)
+    orion_client = OrionoidClient(
+        settings.orionoid_app_api_key,
+        settings.orionoid_user_api_key,
+    )
     startup_time = time.time()
     logger.info("Orionoid client initialized")
-    
-    # Test connection
+
+    # Test connection and seed api_status
     try:
         await orion_client.__aenter__()
         user_info = await orion_client.get_user_info()
-        
-        # Check if we got a successful response
+
         if user_info.get("result", {}).get("status") == "success":
             user_data = user_info.get("data", {})
             username = user_data.get("email", "Unknown")
-            is_premium = user_data.get("subscription", {}).get("package", {}).get("premium", False)
-            remaining_requests = user_data.get("requests", {}).get("streams", {}).get("daily", {}).get("remaining", 0)
-            logger.info(f"Connected to Orionoid. User: {username}, Premium: {is_premium}, Daily requests remaining: {remaining_requests:,}")
+            is_premium = (
+                user_data.get("subscription", {})
+                .get("package", {})
+                .get("premium", False)
+            )
+            remaining = (
+                user_data.get("requests", {})
+                .get("streams", {})
+                .get("daily", {})
+                .get("remaining", 0)
+            )
+            logger.info(
+                "Connected to Orionoid. User: %s, Premium: %s, "
+                "Daily requests remaining: %s",
+                username, is_premium, f"{remaining:,}",
+            )
+            _update_api_status(
+                healthy=True,
+                message="Connected to Orionoid API",
+                user_info={
+                    "username": username,
+                    "premium": is_premium,
+                    "apiCallsRemaining": remaining,
+                },
+            )
         else:
-            # API returned an error
-            error_msg = user_info.get("result", {}).get("message", "Unknown error")
-            logger.warning(f"Orionoid API returned error: {error_msg}")
-            logger.info("Service started but Orionoid authentication may need attention")
+            error_msg = user_info.get("result", {}).get(
+                "message", "Unknown error"
+            )
+            logger.warning("Orionoid API returned error: %s", error_msg)
+            _update_api_status(healthy=False, message=error_msg)
     except Exception as e:
-        logger.error(f"Failed to connect to Orionoid: {e}")
-    
+        logger.error("Failed to connect to Orionoid: %s", e)
+        _update_api_status(healthy=False, message=str(e))
+
     yield
-    
+
     # Shutdown
     if orion_client:
         await orion_client.__aexit__(None, None, None)
@@ -96,137 +149,56 @@ async def root():
 
 
 @app.get("/health")
-async def health_check(force: bool = Query(False, description="Force fresh check, bypassing cache")):
-    """Health check endpoint for monitoring service health"""
-    global health_check_cache, health_check_cache_time
-    
-    # Check cache unless forced
-    if not force and health_check_cache and health_check_cache_time:
-        if (time.time() - health_check_cache_time) < settings.cache_ttl:
-            cached = {
-                k: v for k, v in health_check_cache.items()
-                if k != "_status_code"
-            }
-            return JSONResponse(
-                content=cached,
-                status_code=health_check_cache["_status_code"],
-            )
-    
-    start_time = time.time()
-    checks = {}
-    
-    # Check if client is initialized
-    dependencies_status = "healthy" if orion_client else "unhealthy"
-    dependencies_message = "All dependencies operational" if orion_client else "Orionoid client not initialized"
-    
-    # Initialize default response structure
-    overall_status = "healthy"
-    
-    # Perform Orionoid API health check
-    orionoid_check = {
-        "status": "unhealthy",
-        "message": "Not checked",
-        "responseTime": None,
-        "lastChecked": datetime.now(timezone.utc).isoformat()
-    }
-    
-    auth_check = {
-        "status": "unhealthy", 
-        "message": "Not checked",
-        "userInfo": None
-    }
-    
-    if orion_client:
-        try:
-            # Run health check on Orionoid client
-            health_result = await orion_client.health_check()
-            
-            # Update Orionoid API check
-            orionoid_check["status"] = health_result["status"]
-            orionoid_check["message"] = health_result["message"]
-            orionoid_check["responseTime"] = health_result["responseTime"]
-            
-            # Update authentication check
-            if health_result["status"] == "healthy":
-                auth_check["status"] = "healthy"
-                auth_check["message"] = "API keys are valid"
-                auth_check["userInfo"] = health_result["userInfo"]
-            else:
-                auth_check["status"] = "unhealthy"
-                auth_check["message"] = health_result["message"]
-                overall_status = "unhealthy"
-                
-        except Exception as e:
-            logger.error(f"Health check error: {e}")
-            orionoid_check["status"] = "unhealthy"
-            orionoid_check["message"] = f"Health check failed: {str(e)}"
-            auth_check["status"] = "unhealthy"
-            auth_check["message"] = "Unable to verify authentication"
-            overall_status = "unhealthy"
+async def health_check():
+    """Health check endpoint -- reads passive state, never calls the API."""
+    # 503 only when the service is fundamentally broken
+    if not orion_client:
+        return JSONResponse(
+            content={"status": "unhealthy", "message": "Client not initialized"},
+            status_code=503,
+        )
+
+    # Determine overall status from passive tracking
+    if api_status["healthy"]:
+        overall_status = "healthy"
+    elif api_status["last_checked"] is None:
+        overall_status = "warning"
     else:
-        orionoid_check["status"] = "unhealthy"
-        orionoid_check["message"] = "Orionoid client not initialized"
-        auth_check["status"] = "unhealthy"
-        auth_check["message"] = "Cannot check authentication - client not initialized"
-        overall_status = "unhealthy"
-    
-    # Check search capability
-    search_check = {
-        "status": "healthy" if last_successful_search else "degraded",
-        "message": "Search functionality operational" if last_successful_search else "No searches performed yet",
-        "lastSuccessfulSearch": last_successful_search.isoformat() if last_successful_search else None
-    }
-    
-    # If we haven't had a successful search in 5 minutes, mark as degraded
-    if last_successful_search:
-        time_since_search = (datetime.now(timezone.utc) - last_successful_search).total_seconds()
-        if time_since_search > 300:  # 5 minutes
-            search_check["status"] = "degraded"
-            search_check["message"] = f"No searches in {int(time_since_search / 60)} minutes"
-    
-    # Compile all checks
-    checks = {
-        "orionoid_api": orionoid_check,
-        "authentication": auth_check,
-        "search_capability": search_check,
-        "dependencies": {
-            "status": dependencies_status,
-            "httpClient": "connected" if orion_client else "not initialized",
-            "xmlBuilder": "operational"  # Always operational as it's stateless
-        }
-    }
-    
-    # Determine overall status based on component statuses
-    if any(check.get("status") == "unhealthy" for check in checks.values()):
-        overall_status = "unhealthy"
-    elif any(check.get("status") == "degraded" for check in checks.values()):
         overall_status = "degraded"
-    
-    # Calculate uptime
+
+    search_status = "healthy" if last_successful_search else "idle"
+    if last_successful_search:
+        seconds = (
+            datetime.now(timezone.utc) - last_successful_search
+        ).total_seconds()
+        if seconds > 300:
+            search_status = "stale"
+
     uptime = int(time.time() - startup_time) if startup_time else 0
-    
-    # Build response
+
     response = {
         "status": overall_status,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "version": __version__,
-        "checks": checks,
         "uptime": uptime,
-        "environment": {
-            "host": settings.service_host,
-            "port": settings.service_port,
-            "logLevel": settings.log_level
-        }
+        "orionoid_api": {
+            "healthy": api_status["healthy"],
+            "message": api_status["message"],
+            "lastChecked": api_status["last_checked"],
+            "userInfo": api_status["user_info"],
+        },
+        "search": {
+            "status": search_status,
+            "lastSuccess": (
+                last_successful_search.isoformat()
+                if last_successful_search
+                else None
+            ),
+        },
     }
-    
-    # Determine status code
-    status_code = 503 if overall_status == "unhealthy" else 200
 
-    # Cache all responses (including unhealthy) to avoid hammering the API
-    health_check_cache = {**response, "_status_code": status_code}
-    health_check_cache_time = time.time()
-
-    return JSONResponse(content=response, status_code=status_code)
+    # Always 200 when service is running -- body conveys degraded state
+    return JSONResponse(content=response, status_code=200)
 
 
 @app.get("/api", response_class=PlainTextResponse)
@@ -245,10 +217,14 @@ async def api_endpoint(
     extended: Optional[int] = Query(None, description="Extended attributes")
 ):
     """Main API endpoint for Torznab/Newznab protocol"""
-    
+
     # Log incoming request parameters for debugging
-    logger.info(f"API request: t={t}, q={q}, cat={cat}, imdbid={imdbid}, tvdbid={tvdbid}, tmdbid={tmdbid}, season={season}, ep={ep}, limit={limit}")
-    
+    logger.info(
+        "API request: t=%s, q=%s, cat=%s, imdbid=%s, tvdbid=%s, "
+        "tmdbid=%s, season=%s, ep=%s, limit=%s",
+        t, q, cat, imdbid, tvdbid, tmdbid, season, ep, limit,
+    )
+
     try:
         # Handle capabilities request (no auth required)
         if t == "caps":
@@ -256,17 +232,17 @@ async def api_endpoint(
                 content=TorznabBuilder.build_capabilities(),
                 media_type="application/xml"
             )
-        
+
         # Check API key for other requests
         check_api_key(apikey)
-        
+
         # Ensure we have a client
         if not orion_client:
             raise HTTPException(status_code=503, detail="Orionoid client not initialized")
-        
+
         # Limit max results
         limit = min(limit or settings.default_search_limit, settings.max_search_limit)
-        
+
         # Handle different search types
         if t == "search":
             # General search - determine media type from categories
@@ -277,7 +253,7 @@ async def api_endpoint(
                     media_type = "show"
                 else:
                     media_type = "movie"
-                
+
                 results = await search_orionoid(
                     query=q,
                     imdb_id=imdbid,
@@ -287,7 +263,7 @@ async def api_endpoint(
             else:
                 # No category specified - search both movies and TV shows
                 logger.info("No category specified - searching both movies and TV shows")
-                
+
                 # Search movies and TV in parallel
                 movie_results, tv_results = await asyncio.gather(
                     search_orionoid(
@@ -310,7 +286,7 @@ async def api_endpoint(
                 if isinstance(tv_results, BaseException):
                     logger.warning(f"TV search failed: {tv_results}")
                     tv_results = None
-                
+
                 # Combine results
                 results = {
                     "result": {"status": "success"},
@@ -319,27 +295,27 @@ async def api_endpoint(
                         "count": 0
                     }
                 }
-                
+
                 # Add movie streams (mark them as movies)
                 if movie_results and movie_results.get("result", {}).get("status") == "success":
                     movie_streams = movie_results.get("data", {}).get("streams", [])
                     for stream in movie_streams:
                         stream["_media_type"] = "movie"
                     results["data"]["streams"].extend(movie_streams)
-                
+
                 # Add TV streams (mark them as shows)
                 if tv_results and tv_results.get("result", {}).get("status") == "success":
                     tv_streams = tv_results.get("data", {}).get("streams", [])
                     for stream in tv_streams:
                         stream["_media_type"] = "show"
                     results["data"]["streams"].extend(tv_streams)
-                
+
                 # If both searches failed, return an error
                 if movie_results is None and tv_results is None:
                     raise Exception("Both movie and TV searches failed")
-                
+
                 results["data"]["count"] = len(results["data"]["streams"])
-        
+
         elif t == "tvsearch":
             # TV search
             results = await search_orionoid(
@@ -352,7 +328,7 @@ async def api_endpoint(
                 episode=ep,
                 limit=limit
             )
-        
+
         elif t == "movie":
             # Movie search
             results = await search_orionoid(
@@ -362,19 +338,21 @@ async def api_endpoint(
                 media_type="movie",
                 limit=limit
             )
-        
+
         else:
             return Response(
-                content=TorznabBuilder.build_error(201, f"Incorrect parameter: unknown function '{t}'"),
+                content=TorznabBuilder.build_error(
+                    201, f"Incorrect parameter: unknown function '{t}'"
+                ),
                 media_type="application/xml"
             )
-        
+
         # Build and return XML response
         return Response(
             content=TorznabBuilder.build_search_results(results, t),
             media_type="application/xml"
         )
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -397,44 +375,57 @@ async def search_orionoid(
 ) -> dict:
     """Search Orionoid and return results"""
     global last_successful_search
-    
+
     # Check if we have any search criteria
     if not any([query, imdb_id, tvdb_id, tmdb_id]):
         # For empty searches (Prowlarr connection test), do a real search for a popular movie
-        logger.info("Empty search request - performing test search for 'The Matrix' to validate connection")
+        logger.info(
+            "Empty search request - performing test search for "
+            "'The Matrix' to validate connection"
+        )
         query = "The Matrix"
         limit = 1  # Only need one result for validation
-    
+
     # Clean up IDs (remove 'tt' prefix from IMDb IDs if present)
     if imdb_id and imdb_id.startswith("tt"):
         imdb_id = imdb_id[2:]
-    
+
     # Perform search
-    logger.info(f"Searching Orionoid with: query={query}, imdb_id={imdb_id}, tvdb_id={tvdb_id}, tmdb_id={tmdb_id}, media_type={media_type}, season={season}, episode={episode}")
-    
-    results = await orion_client.search_streams(
-        query=query,
-        imdb_id=imdb_id,
-        tvdb_id=tvdb_id,
-        tmdb_id=tmdb_id,
-        media_type=media_type,
-        season=season,
-        episode=episode,
-        limit=limit
+    logger.info(
+        "Searching Orionoid: query=%s, imdb=%s, tvdb=%s, tmdb=%s, "
+        "type=%s, season=%s, episode=%s",
+        query, imdb_id, tvdb_id, tmdb_id, media_type, season, episode,
     )
-    
+
+    try:
+        results = await orion_client.search_streams(
+            query=query,
+            imdb_id=imdb_id,
+            tvdb_id=tvdb_id,
+            tmdb_id=tmdb_id,
+            media_type=media_type,
+            season=season,
+            episode=episode,
+            limit=limit,
+        )
+    except Exception as e:
+        _update_api_status(healthy=False, message=str(e))
+        raise
+
     # Check for errors
     if results.get("result", {}).get("status") != "success":
         error_msg = results.get("result", {}).get("message", "Unknown error")
+        _update_api_status(healthy=False, message=error_msg)
         raise Exception(f"Orionoid API error: {error_msg}")
-    
+
     # Log results
     streams_count = len(results.get("data", {}).get("streams", []))
-    logger.info(f"Orionoid returned {streams_count} streams")
-    
-    # Update last successful search time
+    logger.info("Orionoid returned %d streams", streams_count)
+
+    # Update status on success
     last_successful_search = datetime.now(timezone.utc)
-    
+    _update_api_status(healthy=True, message="Last search succeeded")
+
     return results
 
 
@@ -456,7 +447,10 @@ async def api_endpoint_with_id(
     extended: Optional[int] = Query(None)
 ):
     """Alternative API endpoint with indexer ID in path (Prowlarr compatibility)"""
-    return await api_endpoint(t, apikey, q, cat, imdbid, tvdbid, tmdbid, season, ep, limit, offset, extended)
+    return await api_endpoint(
+        t, apikey, q, cat, imdbid, tvdbid, tmdbid,
+        season, ep, limit, offset, extended,
+    )
 
 
 if __name__ == "__main__":

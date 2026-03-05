@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prowlarr-orionoid"
+dynamic = ["version"]
+description = "Torznab/Newznab compatible indexer bridge for Orionoid"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi==0.104.1",
+    "uvicorn==0.24.0",
+    "httpx==0.25.1",
+    "pydantic==2.5.0",
+    "pydantic-settings==2.1.0",
+    "python-multipart==0.0.22",
+    "lxml>=4.9.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.0.2",
+    "pytest-asyncio==1.3.0",
+    "ruff>=0.9.0",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "__version__.__version__"}
+
+[tool.setuptools]
+py-modules = [
+    "__version__",
+    "config",
+    "main",
+    "orionoid_client",
+    "torznab_builder",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]

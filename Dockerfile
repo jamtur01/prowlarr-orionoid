@@ -10,11 +10,11 @@ RUN apt-get update && apt-get install -y \
     libxslt-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+# Copy pyproject.toml first for dependency layer caching
+COPY pyproject.toml __version__.py ./
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install runtime dependencies only
+RUN pip install --no-cache-dir .
 
 # Copy application code
 COPY . .
@@ -26,9 +26,9 @@ USER appuser
 # Expose the service port
 EXPOSE 8080
 
-# Health check
+# Health check -- verify HTTP server is listening (no API calls)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD python -c "import httpx; response = httpx.get('http://localhost:8080/health'); exit(0 if response.status_code == 200 else 1)" || exit 1
+  CMD python -c "import httpx; httpx.get('http://localhost:8080/health')" || exit 1
 
 # Run the application
 CMD ["python", "main.py"]

@@ -27,9 +27,9 @@ services:
       # OPTIONAL: Logging
       - LOG_LEVEL=INFO
     
-    # Health check
+    # Health check -- verify HTTP server is listening (no API calls)
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; response = httpx.get('http://localhost:8080/health'); exit(0 if response.status_code == 200 else 1)"]
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8080/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
