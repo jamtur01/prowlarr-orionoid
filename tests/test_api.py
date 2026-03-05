@@ -52,6 +52,38 @@ class TestSearch:
         assert mock_search.call_args.kwargs["imdb_id"] == "1234567"
 
 
+class TestConnectionTest:
+    async def test_empty_search_returns_xml_without_api_call(
+        self, test_client, reset_globals
+    ):
+        """Prowlarr connection test (no query/IDs) should not hit the API."""
+        resp = await test_client.get("/api?t=search")
+        assert resp.status_code == 200
+        root = _parse_xml(resp.text)
+        assert root.tag == "rss"
+        main_module.orion_client.search_streams.assert_not_called()
+
+
+class TestNotFoundHandling:
+    async def test_not_found_treated_as_empty_results(
+        self, test_client, reset_globals
+    ):
+        """Orionoid 'not found' is empty results, not an API error."""
+        main_module.orion_client.search_streams.return_value = {
+            "result": {
+                "status": "error",
+                "message": "The streams could not be found or do not exist yet.",
+            },
+        }
+        resp = await test_client.get("/api?t=movie&q=obscure")
+        assert resp.status_code == 200
+        root = _parse_xml(resp.text)
+        assert root.tag == "rss"
+        assert len(root.findall(".//item")) == 0
+        # Should NOT mark API as unhealthy
+        assert main_module.api_status["healthy"] is True
+
+
 class TestSearchUpdatesApiStatus:
     async def test_success_sets_healthy_and_preserves_user_info(
         self, test_client, mock_search, reset_globals
