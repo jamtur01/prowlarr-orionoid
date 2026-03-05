@@ -1,6 +1,6 @@
 # Prowlarr-Orionoid Bridge
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/jamtur01/prowlarr-orionoid/releases)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/jamtur01/prowlarr-orionoid/releases)
 [![CI Build](https://github.com/jamtur01/prowlarr-orionoid/actions/workflows/ci.yml/badge.svg)](https://github.com/jamtur01/prowlarr-orionoid/actions/workflows/ci.yml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/jamtur01/prowlarr-orionoid)](https://hub.docker.com/r/jamtur01/prowlarr-orionoid)
 [![Docker Image Size](https://img.shields.io/docker/image-size/jamtur01/prowlarr-orionoid/latest)](https://hub.docker.com/r/jamtur01/prowlarr-orionoid)
@@ -14,7 +14,7 @@ A Torznab/Newznab compatible indexer service that allows [Prowlarr](https://prow
 - Support for movies and TV shows
 - Configurable search limits
 - Docker containerization
-- Comprehensive health check endpoint with detailed status reporting
+- Passive health check endpoint (no API calls, reads in-memory state)
 - Optional API key authentication
 - Multi-architecture support (amd64, arm64, arm/v7)
 
@@ -104,9 +104,8 @@ This image supports multiple architectures:
 ### Health Check
 ```
 GET /health
-GET /health?force=true
 ```
-Returns detailed health status including Orionoid connectivity, authentication status, and service uptime.
+Returns service status, uptime, and last-known Orionoid API state. Reads passive in-memory state -- never calls the Orionoid API. Returns 200 as long as the HTTP server is running; the response body conveys degraded/warning status.
 
 ### Capabilities
 ```
@@ -161,7 +160,7 @@ docker run -d \
 
 3. Install dependencies:
    ```bash
-   pip install -r requirements.txt
+   pip install .
    ```
 
 4. Create a `.env` file:
@@ -191,10 +190,10 @@ docker run -d \
 - Check the URL and port are correct
 - Verify any API key is correctly configured
 
-### Health check failing
-- Check `/health` endpoint for detailed error information
-- Verify Orionoid API keys are valid
-- Ensure network connectivity to Orionoid API
+### Health check showing degraded
+- The `/health` endpoint shows the last-known API state; check the `orionoid_api.message` field for details
+- Perform a search to refresh the API status
+- Verify Orionoid API keys are valid and quota is not exhausted
 
 ## Development
 
@@ -206,9 +205,10 @@ prowlarr-orionoid/
 ├── torznab_builder.py   # Torznab XML response builder
 ├── config.py            # Configuration management
 ├── __version__.py       # Version information
-├── requirements.txt     # Python dependencies
+├── pyproject.toml       # Project configuration and dependencies
 ├── Dockerfile          # Docker container definition
 ├── docker-compose.yml  # Docker Compose configuration
+├── tests/              # Test suite (pytest)
 ├── CHANGELOG.md        # Version history
 └── README.md          # This file
 ```
