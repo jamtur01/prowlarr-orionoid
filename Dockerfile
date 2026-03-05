@@ -10,11 +10,11 @@ RUN apt-get update && apt-get install -y \
     libxslt-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY requirements.txt .
+# Copy pyproject.toml first for dependency layer caching
+COPY pyproject.toml __version__.py ./
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install runtime dependencies only
+RUN pip install --no-cache-dir .
 
 # Copy application code
 COPY . .

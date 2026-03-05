@@ -10,12 +10,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Health endpoint called Orionoid API on every request, draining ~288 API calls/day from Docker healthchecks alone and causing cascading 503s when quota was exhausted
 - Container marked unhealthy and restarted when Orionoid API had transient errors, despite the service itself being functional
+- Successful search cleared startup user info (username, quota) from health response
 
 ### Changed
 - `/health` now reads passive in-memory state instead of calling the Orionoid API; returns 200 as long as the HTTP server is running, with degraded/warning status in the response body
 - Docker healthchecks simplified to verify HTTP server connectivity instead of checking response status codes
 - Removed `health_check()` method from `OrionoidClient` (no longer needed)
 - `search_orionoid()` now updates API status on each success/failure, keeping health state current without extra API calls
+
+### Added
+- Test suite with 57 tests covering health endpoint, Torznab API, and XML builder
+- `pyproject.toml` as canonical project configuration (replaces `requirements.txt`)
+- CI workflow runs pytest and ruff lint before Docker build
+- Actions pinned to SHA hashes for supply chain security
 
 ## [1.1.0] - 2026-02-27
 

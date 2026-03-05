@@ -1,7 +1,8 @@
-import httpx
-from typing import Optional, Dict, Any, List
-from urllib.parse import urlencode
 import logging
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlencode
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -12,20 +13,20 @@ class OrionoidClient:
         self.user_key = user_key
         self.base_url = "https://api.orionoid.com"
         self.client = httpx.AsyncClient(timeout=30.0)
-    
+
     async def __aenter__(self):
         return self
-    
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.client.aclose()
-    
+
     async def _make_request(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Make a request to Orionoid API"""
         params.update({
             "keyapp": self.app_key,
             "keyuser": self.user_key
         })
-        
+
         try:
             response = await self.client.post(
                 self.base_url,
@@ -40,7 +41,7 @@ class OrionoidClient:
         except Exception as e:
             logger.error(f"Error making request to Orionoid: {e}")
             raise
-    
+
     async def search_streams(
         self,
         query: Optional[str] = None,
@@ -62,7 +63,7 @@ class OrionoidClient:
             "limitcount": limit,
             "sort": sort
         }
-        
+
         # Add search criteria
         if query:
             params["query"] = query
@@ -72,25 +73,25 @@ class OrionoidClient:
             params["idtvdb"] = tvdb_id
         if tmdb_id:
             params["idtmdb"] = tmdb_id
-        
+
         # Add season/episode info for TV shows
         if media_type == "show":
             if season is not None:
                 params["numberseason"] = season
             if episode is not None:
                 params["numberepisode"] = episode
-        
+
         # Add quality filters
         if video_quality:
             params["videoquality"] = ",".join(video_quality)
-        
+
         # Include additional useful parameters
         params["protocoltorrent"] = 1  # Include torrents
         params["protocolnzb"] = 1      # Include NZBs
         params["debridlookup"] = 0     # Skip debrid lookup to save API calls
-        
+
         return await self._make_request(params)
-    
+
     async def get_user_info(self) -> Dict[str, Any]:
         """Get user account information"""
         params = {
@@ -98,7 +99,7 @@ class OrionoidClient:
             "action": "retrieve"
         }
         return await self._make_request(params)
-    
+
     async def get_app_info(self) -> Dict[str, Any]:
         """Get app information"""
         params = {
@@ -106,4 +107,4 @@ class OrionoidClient:
             "action": "retrieve"
         }
         return await self._make_request(params)
-    
+

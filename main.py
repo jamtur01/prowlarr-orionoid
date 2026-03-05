@@ -1,17 +1,18 @@
-from fastapi import FastAPI, Query, Response, HTTPException
-from fastapi.responses import PlainTextResponse, JSONResponse
-from typing import Optional, Dict, Any
+import asyncio
 import logging
-import uvicorn
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-import time
-import asyncio
+from typing import Any, Dict, Optional
 
+import uvicorn
+from fastapi import FastAPI, HTTPException, Query, Response
+from fastapi.responses import JSONResponse, PlainTextResponse
+
+from __version__ import __version__
 from config import settings
 from orionoid_client import OrionoidClient
 from torznab_builder import TorznabBuilder
-from __version__ import __version__
 
 # Configure logging
 logging.basicConfig(
@@ -35,16 +36,24 @@ api_status: Dict[str, Any] = {
 }
 
 
+_SENTINEL = object()
+
+
 def _update_api_status(
     healthy: bool,
     message: str,
-    user_info: Optional[Dict[str, Any]] = None,
+    user_info: Any = _SENTINEL,
 ):
-    """Update the passive api_status dict from startup or search results."""
+    """Update the passive api_status dict from startup or search results.
+
+    Pass user_info explicitly to overwrite; omit it to preserve the
+    existing value (e.g. startup-populated username/quota).
+    """
     api_status["healthy"] = healthy
     api_status["message"] = message
     api_status["last_checked"] = datetime.now(timezone.utc).isoformat()
-    api_status["user_info"] = user_info
+    if user_info is not _SENTINEL:
+        api_status["user_info"] = user_info
 
 
 @asynccontextmanager
@@ -208,10 +217,14 @@ async def api_endpoint(
     extended: Optional[int] = Query(None, description="Extended attributes")
 ):
     """Main API endpoint for Torznab/Newznab protocol"""
-    
+
     # Log incoming request parameters for debugging
-    logger.info(f"API request: t={t}, q={q}, cat={cat}, imdbid={imdbid}, tvdbid={tvdbid}, tmdbid={tmdbid}, season={season}, ep={ep}, limit={limit}")
-    
+    logger.info(
+        "API request: t=%s, q=%s, cat=%s, imdbid=%s, tvdbid=%s, "
+        "tmdbid=%s, season=%s, ep=%s, limit=%s",
+        t, q, cat, imdbid, tvdbid, tmdbid, season, ep, limit,
+    )
+
     try:
         # Handle capabilities request (no auth required)
         if t == "caps":
@@ -219,17 +232,17 @@ async def api_endpoint(
                 content=TorznabBuilder.build_capabilities(),
                 media_type="application/xml"
             )
-        
+
         # Check API key for other requests
         check_api_key(apikey)
-        
+
         # Ensure we have a client
         if not orion_client:
             raise HTTPException(status_code=503, detail="Orionoid client not initialized")
-        
+
         # Limit max results
         limit = min(limit or settings.default_search_limit, settings.max_search_limit)
-        
+
         # Handle different search types
         if t == "search":
             # General search - determine media type from categories
@@ -240,7 +253,7 @@ async def api_endpoint(
                     media_type = "show"
                 else:
                     media_type = "movie"
-                
+
                 results = await search_orionoid(
                     query=q,
                     imdb_id=imdbid,
@@ -250,7 +263,7 @@ async def api_endpoint(
             else:
                 # No category specified - search both movies and TV shows
                 logger.info("No category specified - searching both movies and TV shows")
-                
+
                 # Search movies and TV in parallel
                 movie_results, tv_results = await asyncio.gather(
                     search_orionoid(
@@ -273,7 +286,7 @@ async def api_endpoint(
                 if isinstance(tv_results, BaseException):
                     logger.warning(f"TV search failed: {tv_results}")
                     tv_results = None
-                
+
                 # Combine results
                 results = {
                     "result": {"status": "success"},
@@ -282,27 +295,27 @@ async def api_endpoint(
                         "count": 0
                     }
                 }
-                
+
                 # Add movie streams (mark them as movies)
                 if movie_results and movie_results.get("result", {}).get("status") == "success":
                     movie_streams = movie_results.get("data", {}).get("streams", [])
                     for stream in movie_streams:
                         stream["_media_type"] = "movie"
                     results["data"]["streams"].extend(movie_streams)
-                
+
                 # Add TV streams (mark them as shows)
                 if tv_results and tv_results.get("result", {}).get("status") == "success":
                     tv_streams = tv_results.get("data", {}).get("streams", [])
                     for stream in tv_streams:
                         stream["_media_type"] = "show"
                     results["data"]["streams"].extend(tv_streams)
-                
+
                 # If both searches failed, return an error
                 if movie_results is None and tv_results is None:
                     raise Exception("Both movie and TV searches failed")
-                
+
                 results["data"]["count"] = len(results["data"]["streams"])
-        
+
         elif t == "tvsearch":
             # TV search
             results = await search_orionoid(
@@ -315,7 +328,7 @@ async def api_endpoint(
                 episode=ep,
                 limit=limit
             )
-        
+
         elif t == "movie":
             # Movie search
             results = await search_orionoid(
@@ -325,19 +338,21 @@ async def api_endpoint(
                 media_type="movie",
                 limit=limit
             )
-        
+
         else:
             return Response(
-                content=TorznabBuilder.build_error(201, f"Incorrect parameter: unknown function '{t}'"),
+                content=TorznabBuilder.build_error(
+                    201, f"Incorrect parameter: unknown function '{t}'"
+                ),
                 media_type="application/xml"
             )
-        
+
         # Build and return XML response
         return Response(
             content=TorznabBuilder.build_search_results(results, t),
             media_type="application/xml"
         )
-    
+
     except HTTPException:
         raise
     except Exception as e:
@@ -360,21 +375,28 @@ async def search_orionoid(
 ) -> dict:
     """Search Orionoid and return results"""
     global last_successful_search
-    
+
     # Check if we have any search criteria
     if not any([query, imdb_id, tvdb_id, tmdb_id]):
         # For empty searches (Prowlarr connection test), do a real search for a popular movie
-        logger.info("Empty search request - performing test search for 'The Matrix' to validate connection")
+        logger.info(
+            "Empty search request - performing test search for "
+            "'The Matrix' to validate connection"
+        )
         query = "The Matrix"
         limit = 1  # Only need one result for validation
-    
+
     # Clean up IDs (remove 'tt' prefix from IMDb IDs if present)
     if imdb_id and imdb_id.startswith("tt"):
         imdb_id = imdb_id[2:]
-    
+
     # Perform search
-    logger.info(f"Searching Orionoid with: query={query}, imdb_id={imdb_id}, tvdb_id={tvdb_id}, tmdb_id={tmdb_id}, media_type={media_type}, season={season}, episode={episode}")
-    
+    logger.info(
+        "Searching Orionoid: query=%s, imdb=%s, tvdb=%s, tmdb=%s, "
+        "type=%s, season=%s, episode=%s",
+        query, imdb_id, tvdb_id, tmdb_id, media_type, season, episode,
+    )
+
     try:
         results = await orion_client.search_streams(
             query=query,
@@ -425,7 +447,10 @@ async def api_endpoint_with_id(
     extended: Optional[int] = Query(None)
 ):
     """Alternative API endpoint with indexer ID in path (Prowlarr compatibility)"""
-    return await api_endpoint(t, apikey, q, cat, imdbid, tvdbid, tmdbid, season, ep, limit, offset, extended)
+    return await api_endpoint(
+        t, apikey, q, cat, imdbid, tvdbid, tmdbid,
+        season, ep, limit, offset, extended,
+    )
 
 
 if __name__ == "__main__":
