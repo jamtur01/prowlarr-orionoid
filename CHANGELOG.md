@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-03-04
+
+### Fixed
+- Health endpoint called Orionoid API on every request, draining ~288 API calls/day from Docker healthchecks alone and causing cascading 503s when quota was exhausted
+- Container marked unhealthy and restarted when Orionoid API had transient errors, despite the service itself being functional
+
+### Changed
+- `/health` now reads passive in-memory state instead of calling the Orionoid API; returns 200 as long as the HTTP server is running, with degraded/warning status in the response body
+- Docker healthchecks simplified to verify HTTP server connectivity instead of checking response status codes
+- Removed `health_check()` method from `OrionoidClient` (no longer needed)
+- `search_orionoid()` now updates API status on each success/failure, keeping health state current without extra API calls
+
 ## [1.1.0] - 2026-02-27
 
 ### Fixed
@@ -50,5 +62,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - App API key is now hardcoded as per Orionoid documentation
 - Only user API key needs to be configured via environment variable
 
+[1.2.0]: https://github.com/jamtur01/prowlarr-orionoid/releases/tag/v1.2.0
 [1.1.0]: https://github.com/jamtur01/prowlarr-orionoid/releases/tag/v1.1.0
 [1.0.0]: https://github.com/jamtur01/prowlarr-orionoid/releases/tag/v1.0.0

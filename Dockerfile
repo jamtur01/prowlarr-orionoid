@@ -26,9 +26,9 @@ USER appuser
 # Expose the service port
 EXPOSE 8080
 
-# Health check
+# Health check -- verify HTTP server is listening (no API calls)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD python -c "import httpx; response = httpx.get('http://localhost:8080/health'); exit(0 if response.status_code == 200 else 1)" || exit 1
+  CMD python -c "import httpx; httpx.get('http://localhost:8080/health')" || exit 1
 
 # Run the application
 CMD ["python", "main.py"]
