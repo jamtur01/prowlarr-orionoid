@@ -26,6 +26,19 @@ class Settings(BaseSettings):
     default_search_limit: int = 100
     max_search_limit: int = 1000
 
+    # Server-side stream filtering.
+    # Orionoid can filter before returning results, which keeps the response
+    # focused and avoids spending the account's daily stream quota on releases
+    # that will be discarded downstream anyway (e.g. CAM/screener rips).
+    # Comma-separated list of Orionoid video qualities, e.g. "hd4k,hd2k,hd1080".
+    # Leave unset to keep the previous behaviour (no quality filtering).
+    # Accepted: hd8k, hd6k, hd4k, hd2k, hd1080, hd720, sd,
+    #           scr1080, scr720, scr, cam1080, cam720, cam
+    orionoid_video_quality: Optional[str] = None
+    # Orionoid sort order. Accepted: none, shuffle, best, popularity,
+    # timeupdated, filesize, streamseeds, videoquality, audiochannels
+    orionoid_sort: str = "best"
+
     # Logging
     log_level: str = "INFO"
 

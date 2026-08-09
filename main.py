@@ -420,6 +420,12 @@ async def search_orionoid(
             season=season,
             episode=episode,
             limit=limit,
+            video_quality=(
+                [q.strip() for q in settings.orionoid_video_quality.split(",") if q.strip()]
+                if settings.orionoid_video_quality
+                else None
+            ),
+            sort=settings.orionoid_sort,
         )
     except Exception as e:
         _update_api_status(healthy=False, message=str(e))
