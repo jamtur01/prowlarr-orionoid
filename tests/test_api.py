@@ -21,6 +21,29 @@ class TestCapabilities:
         assert searching.find("movie-search") is not None
 
 
+class TestStreamFilters:
+    """Server-side filters are forwarded to Orionoid (see config.Settings)."""
+
+    async def test_sort_is_forwarded(self, test_client, mock_search, reset_globals):
+        await test_client.get("/api?t=movie&q=test")
+        assert mock_search.call_args.kwargs["sort"] == "best"
+
+    async def test_video_quality_unset_by_default(
+        self, test_client, mock_search, reset_globals
+    ):
+        await test_client.get("/api?t=movie&q=test")
+        assert mock_search.call_args.kwargs["video_quality"] is None
+
+    async def test_video_quality_is_parsed_into_list(
+        self, test_client, mock_search, reset_globals, monkeypatch
+    ):
+        from config import settings
+
+        monkeypatch.setattr(settings, "orionoid_video_quality", "hd4k, hd1080 ,")
+        await test_client.get("/api?t=movie&q=test")
+        assert mock_search.call_args.kwargs["video_quality"] == ["hd4k", "hd1080"]
+
+
 class TestSearch:
     async def test_movie_search(self, test_client, mock_search, reset_globals):
         await test_client.get("/api?t=movie&q=test")

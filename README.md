@@ -68,6 +68,8 @@ docker-compose up -d
 | `PROWLARR_API_KEY` | No | - | Optional API key for Prowlarr authentication |
 | `DEFAULT_SEARCH_LIMIT` | No | 100 | Default number of results to return |
 | `MAX_SEARCH_LIMIT` | No | 1000 | Maximum allowed search results |
+| `ORIONOID_VIDEO_QUALITY` | No | _(unset)_ | Comma-separated Orionoid video qualities to request, e.g. `hd4k,hd2k,hd1080`. Filters server-side, so low-quality releases never count against the daily stream quota. Accepted: `hd8k`, `hd6k`, `hd4k`, `hd2k`, `hd1080`, `hd720`, `sd`, `scr1080`, `scr720`, `scr`, `cam1080`, `cam720`, `cam` |
+| `ORIONOID_SORT` | No | best | Orionoid sort order: `none`, `shuffle`, `best`, `popularity`, `timeupdated`, `filesize`, `streamseeds`, `videoquality`, `audiochannels` |
 | `LOG_LEVEL` | No | INFO | Logging level (DEBUG, INFO, WARNING, ERROR) |
 
 ## Adding to Prowlarr
